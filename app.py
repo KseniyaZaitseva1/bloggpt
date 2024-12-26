@@ -57,7 +57,7 @@ def generate_content(topic: str):
     try:
         # Генерация заголовка
         title = openai.ChatCompletion.create(
-            model="gpt-4mini",
+            model="gpt-4o-mini",
             messages=[{"role": "user", "content": f"Придумайте привлекательный заголовок для поста на тему: {topic}"}],
             max_tokens=50,
             temperature=0.7
@@ -65,7 +65,7 @@ def generate_content(topic: str):
 
         # Генерация мета-описания
         meta_description = openai.ChatCompletion.create(
-            model="gpt-4mini",
+            model="gpt-4o-mini",
             messages=[{"role": "user", "content": f"Напишите краткое мета-описание для поста с заголовком: {title}"}],
             max_tokens=60,
             temperature=0.7
@@ -73,7 +73,7 @@ def generate_content(topic: str):
 
         # Генерация контента поста
         post_content = openai.ChatCompletion.create(
-            model="gpt-4mini",
+            model="gpt-4o-mini",
             messages=[{"role": "user", "content": f"Напишите подробный пост на тему: {topic}, учитывая последние новости:\n{recent_news}"}],
             max_tokens=150,
             temperature=0.7
