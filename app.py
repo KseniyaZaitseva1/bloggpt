@@ -58,8 +58,8 @@ def generate_content(topic: str):
         # Генерация контента поста
         post_content = openai.ChatCompletion.create(
             model="gpt-4o-mini",
-            messages=[{"role": "user", "content": f"Напишите подробный пост на тему: {topic}, учитывая последние новости:\n{recent_news}. Текст должен быть информативным и завершённым."}],
-            max_tokens=400,
+            messages=[{"role": "user", "content": f"Напишите подробный пост на тему: {topic}, учитывая последние новости:\n{recent_news}. Текст должен быть информативным, полным, содержать не менее 400 символов и завершённым."}],
+            max_tokens=600,
             temperature=0.7,
             stop=["\n"]
         ).choices[0].message.content.strip()
