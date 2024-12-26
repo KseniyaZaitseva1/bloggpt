@@ -39,8 +39,11 @@ def generate_content(topic: str):
     try:
         # Генерация заголовка
         title = openai.ChatCompletion.create(
-            model="gpt-4o-mini",
-            messages=[{"role": "user", "content": f"Придумайте привлекательный заголовок для поста на тему: {topic}"}],
+            model="gpt-4o-mini",  # Используем модель gpt-4o-mini
+            messages=[{
+                "role": "user", 
+                "content": f"Придумайте привлекательный и точный заголовок для поста на тему: '{topic}', который будет интриговать и ясно передавать суть темы."
+            }],
             max_tokens=50,
             temperature=0.7,
             stop=["\n"]
@@ -48,17 +51,23 @@ def generate_content(topic: str):
 
         # Генерация мета-описания
         meta_description = openai.ChatCompletion.create(
-            model="gpt-4o-mini",
-            messages=[{"role": "user", "content": f"Напишите мета-описание для поста с заголовком: {title}, оно должно быть полным и содержательным."}],
+            model="gpt-4o-mini",  # Используем модель gpt-4o-mini
+            messages=[{
+                "role": "user", 
+                "content": f"Напишите мета-описание для поста с заголовком: '{title}'. Оно должно быть полным, информативным и содержать основные ключевые слова."
+            }],
             max_tokens=100,
             temperature=0.7,
-            stop=["."],
+            stop=["."]
         ).choices[0].message.content.strip()
 
         # Генерация контента поста
         post_content = openai.ChatCompletion.create(
-            model="gpt-4o-mini",
-            messages=[{"role": "user", "content": f"Напишите подробный пост на тему: {topic}, учитывая последние новости:\n{recent_news}. Текст должен быть информативным, полным, содержать не менее 400 символов и завершённым."}],
+            model="gpt-4o-mini",  # Используем модель gpt-4o-mini
+            messages=[{
+                "role": "user", 
+                "content": f"Напишите подробный и содержательный пост на тему: '{topic}', используя последние новости:\n{recent_news}. Текст должен быть интересным, информативным и завершённым, с логическим завершением."
+            }],
             max_tokens=600,
             temperature=0.7,
             stop=["\n"]
