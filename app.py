@@ -33,24 +33,6 @@ def get_recent_news(topic: str):
     
     return "\n".join([article["title"] for article in news_data[:3]])
 
-def trim_to_last_sentence(text, max_tokens):
-    """
-    Обрезает текст до последнего полного предложения, чтобы уложиться в лимит токенов.
-    """
-    from transformers import GPT2TokenizerFast
-    tokenizer = GPT2TokenizerFast.from_pretrained("gpt2")
-    
-    tokens = tokenizer.tokenize(text)
-    if len(tokens) <= max_tokens:
-        return text
-
-    truncated_text = tokenizer.decode(tokenizer.encode(text)[:max_tokens])
-    sentences = truncated_text.split(". ")
-    
-    if len(sentences) > 1:
-        return ". ".join(sentences[:-1]) + "."
-    return sentences[0] + "."
-
 def generate_content(topic: str):
     recent_news = get_recent_news(topic)
 
@@ -60,7 +42,8 @@ def generate_content(topic: str):
             model="gpt-4o-mini",
             messages=[{"role": "user", "content": f"Придумайте привлекательный заголовок для поста на тему: {topic}"}],
             max_tokens=50,
-            temperature=0.7
+            temperature=0.7,
+            stop=["\n"]
         ).choices[0].message.content.strip()
 
         # Генерация мета-описания
@@ -68,24 +51,23 @@ def generate_content(topic: str):
             model="gpt-4o-mini",
             messages=[{"role": "user", "content": f"Напишите краткое мета-описание для поста с заголовком: {title}"}],
             max_tokens=60,
-            temperature=0.7
+            temperature=0.7,
+            stop=["\n"]
         ).choices[0].message.content.strip()
 
         # Генерация контента поста
         post_content = openai.ChatCompletion.create(
             model="gpt-4o-mini",
             messages=[{"role": "user", "content": f"Напишите подробный пост на тему: {topic}, учитывая последние новости:\n{recent_news}"}],
-            max_tokens=150,
-            temperature=0.7
+            max_tokens=300,
+            temperature=0.7,
+            stop=["\n"]
         ).choices[0].message.content.strip()
-
-        # Обрезаем текст до последнего полного предложения
-        post_content_trimmed = trim_to_last_sentence(post_content, max_tokens=100)
 
         return {
             "title": title,
             "meta_description": meta_description,
-            "post_content": post_content_trimmed
+            "post_content": post_content
         }
     
     except Exception as e:
