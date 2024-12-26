@@ -1,5 +1,5 @@
 import os
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 import openai
 import requests
@@ -17,14 +17,13 @@ class Topic(BaseModel):
     topic: str
 
 def get_recent_news(topic: str):
-    """Получает последние новости по теме."""
     url = "https://api.currentsapi.services/v1/latest-news"
     params = {
         "language": "en",
         "keywords": topic,
         "apiKey": currentsapi_key
     }
-    response = requests.get(url, params=params, timeout=10)  # Установим таймаут
+    response = requests.get(url, params=params)
     if response.status_code != 200:
         raise HTTPException(status_code=500, detail=f"Ошибка при получении данных: {response.text}")
     
@@ -34,57 +33,67 @@ def get_recent_news(topic: str):
     
     return "\n".join([article["title"] for article in news_data[:3]])
 
-def generate_content_sync(topic: str):
-    """Синхронная генерация контента."""
+def trim_to_last_sentence(text, max_tokens):
+    """
+    Обрезает текст до последнего полного предложения, чтобы уложиться в лимит токенов.
+    """
+    from transformers import GPT2TokenizerFast
+    tokenizer = GPT2TokenizerFast.from_pretrained("gpt2")
+    
+    tokens = tokenizer.tokenize(text)
+    if len(tokens) <= max_tokens:
+        return text
+
+    truncated_text = tokenizer.decode(tokenizer.encode(text)[:max_tokens])
+    sentences = truncated_text.split(". ")
+    
+    if len(sentences) > 1:
+        return ". ".join(sentences[:-1]) + "."
+    return sentences[0] + "."
+
+def generate_content(topic: str):
     recent_news = get_recent_news(topic)
 
     try:
-        # Генерация заголовка, мета-описания и основного текста за один запрос
-        prompt = (
-            f"Тема: {topic}\n\n"
-            f"Свежие новости:\n{recent_news}\n\n"
-            f"Сгенерируйте контент для блога, включая следующие элементы:\n"
-            f"1. Привлекательный заголовок.\n"
-            f"2. Краткое мета-описание.\n"
-            f"3. Основной текст (не более 3 параграфов).\n"
-            f"Пишите логично и связно."
-        )
-        response = openai.ChatCompletion.create(
-            model="gpt-4",
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=500,  # Ограничение на длину ответа
+        # Генерация заголовка
+        title = openai.ChatCompletion.create(
+            model="gpt-4mini",
+            messages=[{"role": "user", "content": f"Придумайте привлекательный заголовок для поста на тему: {topic}"}],
+            max_tokens=50,
             temperature=0.7
-        )
-        result = response.choices[0].message.content.strip()
+        ).choices[0].message.content.strip()
 
-        # Разбиваем результат на части
-        parts = result.split("\n", maxsplit=2)
-        if len(parts) < 3:
-            raise ValueError("Неполный ответ от модели")
+        # Генерация мета-описания
+        meta_description = openai.ChatCompletion.create(
+            model="gpt-4mini",
+            messages=[{"role": "user", "content": f"Напишите краткое мета-описание для поста с заголовком: {title}"}],
+            max_tokens=60,
+            temperature=0.7
+        ).choices[0].message.content.strip()
 
-        title = parts[0].strip()
-        meta_description = parts[1].strip()
-        post_content = parts[2].strip()
+        # Генерация контента поста
+        post_content = openai.ChatCompletion.create(
+            model="gpt-4mini",
+            messages=[{"role": "user", "content": f"Напишите подробный пост на тему: {topic}, учитывая последние новости:\n{recent_news}"}],
+            max_tokens=150,
+            temperature=0.7
+        ).choices[0].message.content.strip()
+
+        # Обрезаем текст до последнего полного предложения
+        post_content_trimmed = trim_to_last_sentence(post_content, max_tokens=100)
 
         return {
             "title": title,
             "meta_description": meta_description,
-            "post_content": post_content
+            "post_content": post_content_trimmed
         }
     
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Ошибка при генерации контента: {str(e)}")
 
-def background_generate_content(topic: str):
-    """Фоновая задача для генерации контента."""
-    content = generate_content_sync(topic)
-    # Сохраняем результат в лог, базу данных или отправляем по email
-    print("Сгенерированный контент:", content)
-
 @app.post("/generate-post")
-async def generate_post_api(topic: Topic, background_tasks: BackgroundTasks):
-    background_tasks.add_task(background_generate_content, topic.topic)
-    return {"status": "Processing", "message": "Контент генерируется в фоне. Вы получите результат позже."}
+async def generate_post_api(topic: Topic):
+    return generate_content(topic.topic)
 
 @app.get("/")
 async def root():
