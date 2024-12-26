@@ -17,6 +17,7 @@ class Topic(BaseModel):
     topic: str
 
 def get_recent_news(topic: str):
+    """Получает последние новости по теме."""
     url = "https://api.currentsapi.services/v1/latest-news"
     params = {
         "language": "en",
@@ -33,56 +34,43 @@ def get_recent_news(topic: str):
     
     return "\n".join([article["title"] for article in news_data[:3]])
 
-def generate_paragraph(topic: str, recent_news: str, previous_content: str = "", max_tokens: int = 150):
-    """Генерация параграфа с учетом контекста."""
-    response = openai.ChatCompletion.create(
-        model="gpt-4",
-        messages=[
-            {
-                "role": "user",
-                "content": (
-                    f"Напишите параграф для поста на тему: {topic}. "
-                    f"Вот последние новости: {recent_news}. "
-                    f"Предыдущий текст: {previous_content if previous_content else 'Отсутствует.'} "
-                    "Пишите полный и связный текст, завершая мысли."
-                )
-            }
-        ],
-        max_tokens=max_tokens,
-        temperature=0.7,
-        stop=["\n\n"]
-    )
-    return response.choices[0].message.content.strip()
-
 def generate_content(topic: str):
+    """Генерирует контент для поста."""
     recent_news = get_recent_news(topic)
 
     try:
-        # Генерация заголовка
-        title = openai.ChatCompletion.create(
+        # Генерация заголовка, мета-описания и основного текста за один запрос
+        prompt = (
+            f"Тема: {topic}\n\n"
+            f"Свежие новости:\n{recent_news}\n\n"
+            f"Сгенерируйте контент для блога, включая следующие элементы:\n"
+            f"1. Привлекательный заголовок.\n"
+            f"2. Краткое мета-описание.\n"
+            f"3. Основной текст (не более 3 параграфов).\n"
+            f"Пишите логично и связно."
+        )
+        response = openai.ChatCompletion.create(
             model="gpt-4",
-            messages=[{"role": "user", "content": f"Придумайте привлекательный заголовок для поста на тему: {topic}"}],
-            max_tokens=50,
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=500,  # Ограничение на длину ответа
             temperature=0.7
-        ).choices[0].message.content.strip()
+        )
+        result = response.choices[0].message.content.strip()
 
-        # Генерация мета-описания
-        meta_description = openai.ChatCompletion.create(
-            model="gpt-4",
-            messages=[{"role": "user", "content": f"Напишите краткое мета-описание для поста с заголовком: {title}"}],
-            max_tokens=60,
-            temperature=0.7
-        ).choices[0].message.content.strip()
+        # Разбиваем результат на части
+        parts = result.split("\n", maxsplit=2)
+        if len(parts) < 3:
+            raise ValueError("Неполный ответ от модели")
 
-        # Генерация основного текста
-        post_content = ""
-        for _ in range(5):  # Генерация до 5 параграфов
-            paragraph = generate_paragraph(topic, recent_news, previous_content=post_content)
-            if not paragraph:
-                break
-            post_content += "\n\n" + paragraph
+        title = parts[0].strip()
+        meta_description = parts[1].strip()
+        post_content = parts[2].strip()
 
-        return {"title": title, "meta_description": meta_description, "post_content": post_content.strip()}
+        return {
+            "title": title,
+            "meta_description": meta_description,
+            "post_content": post_content
+        }
     
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Ошибка при генерации контента: {str(e)}")
