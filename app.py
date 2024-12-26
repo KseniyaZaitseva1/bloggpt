@@ -49,17 +49,17 @@ def generate_content(topic: str):
         # Генерация мета-описания
         meta_description = openai.ChatCompletion.create(
             model="gpt-4o-mini",
-            messages=[{"role": "user", "content": f"Напишите краткое мета-описание для поста с заголовком: {title}"}],
-            max_tokens=60,
+            messages=[{"role": "user", "content": f"Напишите мета-описание для поста с заголовком: {title}, оно должно быть полным и содержательным."}],
+            max_tokens=100,
             temperature=0.7,
-            stop=["\n"]
+            stop=["."],
         ).choices[0].message.content.strip()
 
         # Генерация контента поста
         post_content = openai.ChatCompletion.create(
             model="gpt-4o-mini",
-            messages=[{"role": "user", "content": f"Напишите подробный пост на тему: {topic}, учитывая последние новости:\n{recent_news}"}],
-            max_tokens=300,
+            messages=[{"role": "user", "content": f"Напишите подробный пост на тему: {topic}, учитывая последние новости:\n{recent_news}. Текст должен быть информативным и завершённым."}],
+            max_tokens=400,
             temperature=0.7,
             stop=["\n"]
         ).choices[0].message.content.strip()
