@@ -1,78 +1,87 @@
-def generate_content(topic: str):
-    recent_news = get_recent_news(topic)
+import openai
+import os
+import requests
+from fastapi import FastAPI
+from pydantic import BaseModel
+import uvicorn
+
+# Получаем ключи API
+openai.api_key = os.getenv("OPENAI_API_KEY")
+currentsapi_key = os.getenv("CURRENTS_API_KEY")
+
+# Создаем FastAPI приложение
+app = FastAPI()
+
+# Модель запроса с темой (topic)
+class TopicRequest(BaseModel):
+    topic: str
+
+# Функция для получения актуальных новостей по теме
+def get_current_news(topic):
+    url = f"https://api.currentsapi.services/v1/search"
+    params = {
+        "apiKey": currentsapi_key,
+        "keywords": topic,
+        "language": "ru",
+        "pageSize": 5  # Количество новостей
+    }
+    response = requests.get(url, params=params)
+    news_data = response.json()
     
-    if not recent_news:
-        raise HTTPException(status_code=400, detail="Не удалось получить актуальные новости по заданной теме.")
+    # Проверим, есть ли новости, если нет, возвращаем пустой список
+    if news_data.get("status") == "ok" and news_data.get("news"):
+        return news_data["news"]
+    return []
+
+# Функция для генерации контента с использованием OpenAI
+def generate_post(topic, news):
+    # Генерация заголовка
+    prompt_title = f"Придумайте привлекательный заголовок для поста на тему: {topic}. Используйте актуальные новости: {news}"
+    response_title = openai.ChatCompletion.create(
+        model="gpt-4",
+        messages=[{"role": "user", "content": prompt_title}],
+        max_tokens=50,
+        temperature=0.7,
+    )
+    title = response_title.choices[0].message.content.strip()
+
+    # Генерация мета-описания
+    prompt_meta = f"Напишите краткое мета-описание для поста с заголовком: {title}. Используйте новости: {news}"
+    response_meta = openai.ChatCompletion.create(
+        model="gpt-4",
+        messages=[{"role": "user", "content": prompt_meta}],
+        max_tokens=100,
+        temperature=0.7,
+    )
+    meta_description = response_meta.choices[0].message.content.strip()
+
+    # Генерация самого поста
+    prompt_post = f"Напишите подробный и увлекательный пост для блога на тему: {topic}. Включите актуальные новости: {news}. Используйте SEO-оптимизацию."
+    response_post = openai.ChatCompletion.create(
+        model="gpt-4",
+        messages=[{"role": "user", "content": prompt_post}],
+        max_tokens=2048,
+        temperature=0.7,
+    )
+    post_content = response_post.choices[0].message.content.strip()
+
+    return {
+        "title": title,
+        "meta_description": meta_description,
+        "post_content": post_content
+    }
+
+# Эндпоинт для генерации поста
+@app.post("/generate_post/")
+async def generate_content(request: TopicRequest):
+    topic = request.topic
+    news = get_current_news(topic)  # Получаем актуальные новости по теме
+    news_headlines = ", ".join([news_item["title"] for news_item in news]) if news else "Нет актуальных новостей"
+
+    content = generate_post(topic, news_headlines)
     
-    try:
-        # Генерация заголовка
-        title = openai.ChatCompletion.create(
-            model="gpt-4o-mini",
-            messages=[{
-                "role": "user", 
-                "content": f"Создайте привлекательный заголовок для статьи на тему '{topic}', с учётом актуальных новостей:\n{recent_news}. Заголовок должен быть интересным и актуальным."
-            }],
-            max_tokens=50,
-            temperature=0.5,
-            stop=["\n"]
-        ).choices[0].message.content.strip()
+    return content
 
-        # Генерация краткого мета-описания 
-        meta_description = openai.ChatCompletion.create(
-            model="gpt-4o-mini",
-            messages=[{
-                "role": "user", 
-                "content": f"Напишите краткое мета-описание для статьи с заголовком '{title}', основываясь на новостях:\n{recent_news}. Описание должно быть информативным и в пределах 150 символов."
-            }],
-            max_tokens=150,  # Увеличено до 150
-            temperature=0.5,
-            stop=["."]
-        ).choices[0].message.content.strip()
-
-        # Генерация развернутого контента поста
-        post_content = openai.ChatCompletion.create(
-            model="gpt-4o-mini",
-            messages=[{
-                "role": "user", 
-                "content": f"""Напишите подробную, структурированную статью на тему '{topic}', основываясь на новостях:\n{recent_news}. 
-
-Требования:
-1. Минимум 2000 символов
-2. Четкая структура с подзаголовками
-3. Вступление, основная часть (минимум 3 подраздела), заключение
-4. Включить анализ трендов и прогнозы
-5. Добавить примеры и цитаты из новостей
-6. Каждый абзац минимум 3-4 предложения
-7. Текст должен быть легким для чтения и информативным"""
-            }],
-            max_tokens=1500,  # уменьшено до 1500
-            temperature=0.5,  # Температура понижена
-            presence_penalty=0.3,  # Уменьшено
-            frequency_penalty=0.3  # Уменьшено
-        ).choices[0].message.content.strip()
-
-        return {
-            "title": title,
-            "meta_description": meta_description,
-            "post_content": post_content
-        }
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Ошибка при генерации контента: {str(e)}")
-        
-@app.post("/generate-post")
-async def generate_post_api(topic: Topic):
-    return generate_content(topic.topic)
-
-@app.get("/")
-async def root():
-    return {"message": "Service is running"}
-
-@app.get("/heartbeat")
-async def heartbeat_api():
-    return {"status": "OK"}
-
+# Запуск приложения
 if __name__ == "__main__":
-    import uvicorn
-    port = int(os.getenv("PORT", 8000))
-    uvicorn.run("app:app", host="0.0.0.0", port=port)
+    uvicorn.run(app, host="0.0.0.0", port=8000)
