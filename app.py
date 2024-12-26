@@ -59,3 +59,20 @@ def generate_content(topic: str):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Ошибка при генерации контента: {str(e)}")
+        
+@app.post("/generate-post")
+async def generate_post_api(topic: Topic):
+    return generate_content(topic.topic)
+
+@app.get("/")
+async def root():
+    return {"message": "Service is running"}
+
+@app.get("/heartbeat")
+async def heartbeat_api():
+    return {"status": "OK"}
+
+if __name__ == "__main__":
+    import uvicorn
+    port = int(os.getenv("PORT", 8000))
+    uvicorn.run("app:app", host="0.0.0.0", port=port)
