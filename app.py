@@ -19,7 +19,7 @@ class Topic(BaseModel):
 def get_recent_news(topic: str):
     url = "https://api.currentsapi.services/v1/latest-news"
     params = {
-        "language": "en",
+        "language": "ru",  # Используем русский язык для новостей
         "keywords": topic,
         "apiKey": currentsapi_key
     }
@@ -31,7 +31,8 @@ def get_recent_news(topic: str):
     if not news_data:
         return "Свежих новостей не найдено."
     
-    return "\n".join([article["title"] for article in news_data[:3]])
+    # Возвращаем только 3 самые актуальные новости
+    return "\n".join([article["title"] + ": " + article["description"] for article in news_data[:3]])
 
 def generate_content(topic: str):
     recent_news = get_recent_news(topic)
@@ -42,7 +43,7 @@ def generate_content(topic: str):
             model="gpt-4o-mini",  # Используем модель gpt-4o-mini
             messages=[{
                 "role": "user", 
-                "content": f"Придумайте привлекательный и точный заголовок для поста на тему: '{topic}', который будет интриговать и ясно передавать суть темы."
+                "content": f"Создайте заголовок для статьи на тему '{topic}' с учетом последних новостей:\n{recent_news}. Заголовок должен быть привлекательным и соответствовать теме."
             }],
             max_tokens=50,
             temperature=0.7,
@@ -54,9 +55,9 @@ def generate_content(topic: str):
             model="gpt-4o-mini",  # Используем модель gpt-4o-mini
             messages=[{
                 "role": "user", 
-                "content": f"Напишите мета-описание для поста с заголовком: '{title}'. Оно должно быть полным, информативным и содержать основные ключевые слова."
+                "content": f"Напишите мета-описание для статьи с заголовком '{title}'. Мета-описание должно быть информативным и отражать суть темы с учетом свежих новостей:\n{recent_news}."
             }],
-            max_tokens=100,
+            max_tokens=150,
             temperature=0.7,
             stop=["."]
         ).choices[0].message.content.strip()
@@ -66,9 +67,9 @@ def generate_content(topic: str):
             model="gpt-4o-mini",  # Используем модель gpt-4o-mini
             messages=[{
                 "role": "user", 
-                "content": f"Напишите подробный, детализированный и интересный пост на тему: '{topic}', используя последние новости:\n{recent_news}. Пост должен быть глубоким, содержательным и информативным, объемом не менее 800 символов и с логическим завершением."
+                "content": f"Напишите подробный и содержательный пост на тему '{topic}', используя следующие последние новости:\n{recent_news}. Текст должен быть логичным, интересным и завершённым, объёмом не менее 1000 символов."
             }],
-            max_tokens=1000,  # Увеличено количество токенов для генерации длинного контента
+            max_tokens=1200,  # Увеличено количество токенов для генерации длинного контента
             temperature=0.7,
             stop=["\n"]
         ).choices[0].message.content.strip()
