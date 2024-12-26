@@ -54,14 +54,30 @@ def generate_content(topic: str):
         ).choices[0].message.content.strip()
 
         # Генерация контента поста
-        post_content = openai.ChatCompletion.create(
-            model="gpt-4o-mini",
-            messages=[{"role": "user", "content": f"Напишите подробный пост на тему: {topic}, учитывая последние новости:\n{recent_news}"}],
-            max_tokens=100,
-            temperature=0.7
-        ).choices[0].message.content.strip()
+        post_content = ""
+        remaining_tokens = 100  # Ограничение на 100 токенов за раз
+        
+        # Итерация, чтобы гарантировать завершенность предложений
+        while remaining_tokens > 0:
+            response = openai.ChatCompletion.create(
+                model="gpt-4o-mini",
+                messages=[{
+                    "role": "user", 
+                    "content": f"Напишите продолжение поста на тему: {topic}, учитывая последние новости:\n{recent_news}\nПродолжите, чтобы завершить мысль."
+                }],
+                max_tokens=remaining_tokens,
+                temperature=0.7,
+                stop=[".", "!", "?"]  # Ожидаем завершения предложений
+            )
+            new_content = response.choices[0].message.content.strip()
+            post_content += " " + new_content
 
-        return {"title": title, "meta_description": meta_description, "post_content": post_content}
+            # Пересчитываем оставшиеся токены (максимум 100 токенов для каждого шага)
+            remaining_tokens -= len(new_content.split())
+            if len(new_content.split()) == 0:
+                break  # Завершаем, если нет нового контента
+
+        return {"title": title, "meta_description": meta_description, "post_content": post_content.strip()}
     
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Ошибка при генерации контента: {str(e)}")
