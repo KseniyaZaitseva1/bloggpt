@@ -1,5 +1,5 @@
 import os
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, BackgroundTasks
 from pydantic import BaseModel
 import openai
 import requests
@@ -24,7 +24,7 @@ def get_recent_news(topic: str):
         "keywords": topic,
         "apiKey": currentsapi_key
     }
-    response = requests.get(url, params=params)
+    response = requests.get(url, params=params, timeout=10)  # Установим таймаут
     if response.status_code != 200:
         raise HTTPException(status_code=500, detail=f"Ошибка при получении данных: {response.text}")
     
@@ -34,8 +34,8 @@ def get_recent_news(topic: str):
     
     return "\n".join([article["title"] for article in news_data[:3]])
 
-def generate_content(topic: str):
-    """Генерирует контент для поста."""
+def generate_content_sync(topic: str):
+    """Синхронная генерация контента."""
     recent_news = get_recent_news(topic)
 
     try:
@@ -75,9 +75,16 @@ def generate_content(topic: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Ошибка при генерации контента: {str(e)}")
 
+def background_generate_content(topic: str):
+    """Фоновая задача для генерации контента."""
+    content = generate_content_sync(topic)
+    # Сохраняем результат в лог, базу данных или отправляем по email
+    print("Сгенерированный контент:", content)
+
 @app.post("/generate-post")
-async def generate_post_api(topic: Topic):
-    return generate_content(topic.topic)
+async def generate_post_api(topic: Topic, background_tasks: BackgroundTasks):
+    background_tasks.add_task(background_generate_content, topic.topic)
+    return {"status": "Processing", "message": "Контент генерируется в фоне. Вы получите результат позже."}
 
 @app.get("/")
 async def root():
